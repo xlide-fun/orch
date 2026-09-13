@@ -8,47 +8,52 @@ class ThreadsManager(BaseManager):
     def __init__(self, handle: str, credentials: dict = None):
         super().__init__("threads", handle)
         self.credentials = credentials or {}
+        self._pw = None
+
+    async def _ensure_context(self):
+        if self.context:
+            return
+        self._pw = await async_playwright().start()
+        user_dir = f"./user_data/threads_{self.handle}"
+        Path(user_dir).mkdir(parents=True, exist_ok=True)
+        self.context = await launch_stealth_context(self._pw, "threads", user_data_dir=user_dir, headless=False)
+        self.page = self.context.pages[0] if self.context.pages else await self.context.new_page()
 
     async def is_logged_in(self) -> bool:
-        if not self.page:
-            return False
+        await self._ensure_context()
         try:
-            await self.page.goto("https://www.threads.net/", timeout=15000)
+            await self.page.goto("https://www.threads.net/", timeout=20000)
+            await human_delay(1, 2)
             return "login" not in self.page.url.lower()
         except Exception:
             return False
 
     async def login(self) -> bool:
-        async with async_playwright() as p:
-            user_dir = f"./user_data/threads_{self.handle}"
-            Path(user_dir).mkdir(parents=True, exist_ok=True)
-            self.context = await launch_stealth_context(p, "threads", user_data_dir=user_dir, headless=False)
-            self.page = self.context.pages[0] if self.context.pages else await self.context.new_page()
-            if await self.is_logged_in():
-                await self.context.storage_state(path=self.get_session_path())
-                return True
-            await self.page.goto("https://www.threads.net/login")
-            await human_delay(2, 4)
-            # Often redirects through Instagram auth; rely on shared session
-            if await self.is_logged_in():
-                await self.context.storage_state(path=self.get_session_path())
-                return True
-            return False
+        await self._ensure_context()
+        if await self.is_logged_in():
+            await self.context.storage_state(path=self.get_session_path())
+            return True
+        await self.page.goto("https://www.threads.net/login")
+        await human_delay(3, 5)
+        if await self.is_logged_in():
+            Path(self.get_session_path()).parent.mkdir(parents=True, exist_ok=True)
+            await self.context.storage_state(path=self.get_session_path())
+            return True
+        return False
 
     async def post(self, video_path: str, caption: str) -> str:
         try:
-            if not self.page:
-                ok = await self.login()
-                if not ok:
+            if not await self.is_logged_in():
+                if not await self.login():
                     raise RuntimeError("Threads login failed")
             await self.page.goto("https://www.threads.net/")
             await human_delay(2, 3)
             await self.page.click('div[role="button"]:has-text("New thread")')
             await human_delay(1, 2)
-            await self.page.fill('div[role="textbox"]', caption)
-            if video_path:
-                file_input = self.page.locator('input[type="file"]').first
-                await file_input.set_input_files(video_path)
+            await self.page.fill('div[role="textbox"]', caption[:500])
+            if video_path and Path(video_path).exists():
+                fi = self.page.locator('input[type="file"]').first
+                await fi.set_input_files(video_path)
                 await human_delay(4, 8)
             await self.page.click('div[role="button"]:has-text("Post")')
             await human_delay(3, 6)
@@ -57,3 +62,14 @@ class ThreadsManager(BaseManager):
             if self.page:
                 await capture_failure(self.page, "threads", "post")
             raise
+
+    async def close(self):
+        if self.context:
+            try:
+                await self.context.storage_state(path=self.get_session_path())
+            except Exception:
+                pass
+            await self.context.close()
+        if self._pw:
+            await self._pw.stop()
+        self.context = self.page = None
