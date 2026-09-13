@@ -10,5 +10,5 @@ class BaseCollector(ABC):
     async def fetch_recent(self, limit: int = 20) -> List[Dict]:
         pass
 
-    def _filter_sfw(self, items: List[Dict]) -> List[Dict]:
+    def filter_sfw(self, items: List[Dict]) -> List[Dict]:
         return items

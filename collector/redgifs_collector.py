@@ -14,7 +14,7 @@ class RedGifsCollector(BaseCollector):
                 data = await r.json()
                 self.token = data.get("token")
 
-    async def _get(self, path: str, params: dict = None):
+    async def _get(self, path: str, params: dict = None) -> dict:
         if not self.token:
             await self.authenticate()
         headers = {"Authorization": f"Bearer {self.token}"}
@@ -25,24 +25,14 @@ class RedGifsCollector(BaseCollector):
     async def fetch_trending(self, limit: int = 20) -> List[Dict]:
         data = await self._get("/trending", {"limit": limit, "order": "trending"})
         gifs = data.get("gifs", [])
-        return self._filter_sfw(gifs)
+        return self.filter_sfw(gifs)
 
     async def fetch_recent(self, limit: int = 20) -> List[Dict]:
         data = await self._get("/recent", {"limit": limit})
-        gifs = data.get("gifs", [])
-        return self._filter_sfw(gifs)
+        return self.filter_sfw(data.get("gifs", []))
 
-    def _filter_sfw(self, gifs: List[Dict]) -> List[Dict]:
-        filtered = [g for g in gifs if g.get("nsfw_score", 1) < 0.3]
-        if not filtered:
-            filtered = sorted(gifs, key=lambda x: x.get("nsfw_score", 1))[:5]
-        return [{
-            "id": g.get("id"),
-            "url": g.get("urls", {}).get("sd"),
-            "thumbnail": g.get("urls", {}).get("thumbnail"),
-            "duration": g.get("duration"),
-            "tags": g.get("tags", []),
-            "views": g.get("views"),
-            "nsfw_score": g.get("nsfw_score"),
-            "source": "redgifs"
-        } for g in filtered]
+    def filter_sfw(self, gifs: List[Dict]) -> List[Dict]:
+        out = [g for g in gifs if g.get("nsfw_score", 1) < 0.3]
+        if not out:
+            out = sorted(gifs, key=lambda x: x.get("nsfw_score", 1))[:5]
+        return out
