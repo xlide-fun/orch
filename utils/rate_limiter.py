@@ -1,25 +1,21 @@
 import time
+import asyncio
 from collections import defaultdict
-
-class TokenBucket:
-    def __init__(self, rate: float, capacity: float):
-        self.rate = rate
-        self.capacity = capacity
-        self.tokens = capacity
-        self.last = time.monotonic()
-
-    def consume(self, n=1) -> bool:
-        now = time.monotonic()
-        self.tokens = min(self.capacity, self.tokens + (now - self.last) * self.rate)
-        self.last = now
-        if self.tokens >= n:
-            self.tokens -= n
-            return True
-        return False
 
 class RateLimiter:
     def __init__(self):
-        self.buckets = defaultdict(lambda: TokenBucket(1, 5))
+        self._last = defaultdict(float)
+        self._limits = {
+            "x": 60 * 4,          # ~15/day spacing roughly enforced externally
+            "reddit": 60 * 3,
+            "instagram": 60 * 15,
+            "tiktok": 60 * 20,
+            "threads": 60 * 2,
+        }
 
-    def allow(self, key: str) -> bool:
-        return self.buckets[key].consume()
+    async def wait(self, platform: str):
+        min_gap = self._limits.get(platform, 60)
+        elapsed = time.time() - self._last[platform]
+        if elapsed < min_gap:
+            await asyncio.sleep(min_gap - elapsed)
+        self._last[platform] = time.time()

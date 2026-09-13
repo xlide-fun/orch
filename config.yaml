@@ -1,20 +1,35 @@
 accounts:
   x:
     handle: "your_handle"
+    username: ""
+    password: ""
     session: "./sessions/x_handle.json"
   reddit:
-    username: "your_user"
-    session: "./sessions/reddit_user.json"
+    username: ""
+    password: ""
     subreddits: ["fitness", "sports", "dance", "art", "adventures"]
+    session: "./sessions/reddit_user.json"
   instagram:
-    handle: "your_handle"
+    handle: ""
+    username: ""
+    password: ""
     session: "./sessions/instagram_handle.json"
   tiktok:
-    handle: "your_handle"
+    handle: ""
     session: "./sessions/tiktok_handle.json"
   threads:
-    handle: "your_handle"
+    handle: ""
     session: "./sessions/threads_handle.json"
+
+api:
+  telegram_bot_token: ""
+  discord_webhook: ""
+  mastodon:
+    instance: "https://mastodon.social"
+    access_token: ""
+  bluesky:
+    handle: ""
+    app_password: ""
 
 rate_limits:
   x: 15
@@ -26,3 +41,6 @@ rate_limits:
 stealth:
   headless: false
   delays: [1, 8]
+
+proxies:
+  default: null
