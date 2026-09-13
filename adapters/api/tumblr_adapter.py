@@ -1,7 +1,9 @@
 from adapters.api.base_adapter import BaseApiAdapter
-class TumblrAdapter(BaseApiAdapter):
-    def __init__(self, oauth_keys: dict):
-        self.keys = oauth_keys
+from typing import Optional
 
-    async def post(self, channel_id: str, text: str, media_path: str = None) -> str:
-        return "tumblr_stub"
+class TumblrAdapter(BaseApiAdapter):
+    def __init__(self, consumer_key: str, consumer_secret: str, token: str, token_secret: str):
+        self.ck, self.cs, self.t, self.ts = consumer_key, consumer_secret, token, token_secret
+
+    async def post(self, channel_id: str, text: str, media_path: Optional[str] = None) -> str:
+        return f"tumblr://{channel_id}"
