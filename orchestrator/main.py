@@ -1,5 +1,6 @@
 import asyncio
 import os
+import hashlib
 from collector.redgifs_collector import RedGifsCollector
 from collector.eporner_collector import EpornerCollector
 from orchestrator.categorizer import ContentCategorizer
@@ -8,6 +9,10 @@ from utils.db import enqueue_job, init_db
 from utils.media import download_media
 
 init_db()
+
+def content_hash(item: dict, platform: str) -> str:
+    raw = f"{item.get('id') or item.get('url') or item.get('title')}|{platform}"
+    return hashlib.sha256(raw.encode()).hexdigest()[:24]
 
 class DistributionOrchestrator:
     def __init__(self):
@@ -30,9 +35,13 @@ class DistributionOrchestrator:
         except Exception as e:
             print("Eporner:", e)
 
+        queued = 0
         for item in items:
             cat = self.categorizer.categorize(item)
-            media_url = item.get("urls", {}).get("sd") or item.get("url") or item.get("embed_url") or ""
+            media_url = ""
+            if isinstance(item.get("urls"), dict):
+                media_url = item["urls"].get("sd") or item["urls"].get("hd") or ""
+            media_url = media_url or item.get("url") or item.get("embed_url") or ""
             local = ""
             if media_url.startswith("http"):
                 try:
@@ -42,8 +51,11 @@ class DistributionOrchestrator:
                     continue
             for p in self.platforms:
                 packet = self.normalizer.normalize_for_platform(item, p, cat)
-                enqueue_job(p, local or media_url, packet["caption"])
-        print(f"Queued cycle: {len(items)} items")
+                h = content_hash(item, p)
+                jid = enqueue_job(p, local or media_url, packet["caption"], content_hash=h)
+                if jid:
+                    queued += 1
+        print(f"Queued {queued} new jobs from {len(items)} items")
 
 async def main():
     orch = DistributionOrchestrator()

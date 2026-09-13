@@ -1,11 +1,12 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI
 from pydantic import BaseModel
 from typing import Optional, List
 import uvicorn
-from utils.db import init_db, enqueue_job
+from utils.db import init_db, enqueue_job, get_pending_jobs
 from content_normalizer import normalize
+import hashlib
 
-app = FastAPI(title="Orch Distribution", version="1.0")
+app = FastAPI(title="Orch Distribution", version="1.1")
 init_db()
 
 class DistributeRequest(BaseModel):
@@ -22,21 +23,26 @@ async def distribute(req: DistributeRequest):
     for p in platforms:
         cap = norms.get(p)
         if isinstance(cap, dict):
-            # reddit style
             text = f"{cap.get('title', '')}\n{cap.get('body', '')}"
         else:
             text = cap or req.caption
-        jid = enqueue_job(p, req.video_path, text, req.hashtags or "")
-        job_ids.append({"platform": p, "job_id": jid})
+        h = hashlib.sha256(f"{req.video_path}|{p}|{text[:80]}".encode()).hexdigest()[:24]
+        jid = enqueue_job(p, req.video_path, text, req.hashtags or "", content_hash=h)
+        if jid:
+            job_ids.append({"platform": p, "job_id": jid})
     return {"status": "queued", "jobs": job_ids}
 
 @app.get("/health")
 async def health():
-    return {"ok": True, "service": "orch"}
+    pending = get_pending_jobs(100)
+    return {
+        "ok": True,
+        "service": "orch",
+        "pending_jobs": len(pending),
+    }
 
 @app.get("/jobs/pending")
 async def pending():
-    from utils.db import get_pending_jobs
     return get_pending_jobs(20)
 
 if __name__ == "__main__":
