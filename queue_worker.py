@@ -1,22 +1,25 @@
 import asyncio
 import random
 import yaml
-from datetime import datetime
 from pathlib import Path
-from utils.db import get_pending_jobs, update_job, init_db
+from utils.db import claim_job, mark_posted, mark_failed, init_db
 from managers.x_manager import XManager
 from managers.reddit_manager import RedditManager
 from managers.instagram_manager import InstagramManager
 from managers.tiktok_manager import TikTokManager
 from managers.threads_manager import ThreadsManager
 from utils.media import download_media
+from utils.rate_limiter import RateLimiter
 
 init_db()
+limiter = RateLimiter()
 
 CONFIG = {}
 if Path("config.yaml").exists():
     with open("config.yaml") as f:
         CONFIG = yaml.safe_load(f) or {}
+
+BROWSER_PLATFORMS = {"x", "reddit", "instagram", "tiktok", "threads"}
 
 def make_manager(platform: str):
     acc = CONFIG.get("accounts", {}).get(platform, {})
@@ -24,7 +27,8 @@ def make_manager(platform: str):
     if platform == "x":
         return XManager(acc.get("handle", "x"), credentials=creds)
     if platform == "reddit":
-        return RedditManager(acc.get("username", "reddit"), credentials=creds, subreddit=(acc.get("subreddits") or ["fitness"])[0])
+        subs = acc.get("subreddits") or ["fitness"]
+        return RedditManager(acc.get("username", "reddit"), credentials=creds, subreddit=subs[0])
     if platform == "instagram":
         return InstagramManager(acc.get("handle", "ig"), credentials=creds)
     if platform == "tiktok":
@@ -35,31 +39,36 @@ def make_manager(platform: str):
 
 async def process_job(job):
     platform = job["platform"]
-    update_job(job["id"], status="running", attempts=job["attempts"] + 1)
+    if platform not in BROWSER_PLATFORMS:
+        from utils.db import update_job
+        update_job(job["id"], status="pending", attempts=max(0, job["attempts"] - 1))
+        return
+    await limiter.wait(platform)
     manager = make_manager(platform)
     try:
-        media = job["video_path"] or ""
+        media = job.get("video_path") or ""
         if media.startswith("http"):
             media = await download_media(media, prefix=f"{platform}_")
-        url = await manager.post(media, job["caption"] or "")
-        update_job(job["id"], status="posted", post_url=url, posted_at=datetime.utcnow().isoformat())
+        if not media or (not media.startswith("http") and not Path(media).exists()):
+            raise FileNotFoundError(f"Media missing: {media}")
+        url = await manager.post(media, job.get("caption") or "")
+        mark_posted(job["id"], url)
         print(f"[OK] {platform} -> {url}")
     except Exception as e:
-        update_job(job["id"], status="failed", error_msg=str(e)[:500])
+        mark_failed(job["id"], str(e), job["attempts"])
         print(f"[FAIL] {platform}: {e}")
     finally:
         await manager.close()
 
 async def worker_loop():
-    print("Worker started")
+    print("Browser worker started")
     while True:
-        jobs = get_pending_jobs(limit=1)
-        if not jobs:
+        job = claim_job()
+        if not job:
             await asyncio.sleep(8)
             continue
-        for job in jobs:
-            await process_job(job)
-            await asyncio.sleep(random.randint(45, 180))
+        await process_job(job)
+        await asyncio.sleep(random.randint(30, 90))
 
 if __name__ == "__main__":
     asyncio.run(worker_loop())
