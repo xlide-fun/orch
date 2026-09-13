@@ -19,9 +19,9 @@ class ContentCategorizer:
         tags = [t.lower() for t in content.get("tags", [])]
         scores = {}
         for t in tags:
-            cat = self.tag_map.get(t)
-            if cat:
+            if t in self.tag_map:
+                cat = self.tag_map[t]
                 scores[cat] = scores.get(cat, 0) + 1
-        if not scores:
-            return "fitness"  # default
-        return max(scores, key=scores.get)
+        if scores:
+            return max(scores, key=scores.get)
+        return "fitness"  # default
