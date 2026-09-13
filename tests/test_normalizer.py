@@ -18,4 +18,5 @@ def test_platform_normalizer():
     n = ContentNormalizer()
     pkt = n.normalize_for_platform({"title": "hello", "tags": ["gym"]}, "x", "fitness")
     assert pkt["platform"] == "x"
-    assert "Xlide" in pkt["caption"] or "fitness" in pkt["caption"].lower() or len(pkt["caption"]) > 0
+    assert isinstance(pkt["caption"], str)
+    assert len(pkt["caption"]) > 0
