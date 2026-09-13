@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  syntax-and-imports:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install deps
+        run: |
+          pip install -r requirements.txt
+          pip install pytest pytest-asyncio
+      - name: Syntax check all modules
+        run: |
+          python -m compileall -q .
+      - name: Import smoke
+        run: |
+          python -c "
+from content_normalizer import normalize
+from orchestrator.categorizer import ContentCategorizer
+from orchestrator.normalizer import ContentNormalizer
+from utils.db import init_db, enqueue_job, claim_job, mark_posted, mark_failed
+from utils.rate_limiter import RateLimiter
+from utils.proxy import parse_proxy
+from utils.media import download_media
+from managers.base_manager import BaseManager
+from adapters.api.base_adapter import BaseApiAdapter
+print('imports ok')
+"
+      - name: Unit tests
+        run: pytest tests/ -v --tb=short
+
+  production-readiness:
+    runs-on: ubuntu-latest
+    needs: syntax-and-imports
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install deps
+        run: pip install -r requirements.txt pyyaml
+      - name: Readiness checklist
+        run: python scripts/prod_check.py
