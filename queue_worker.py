@@ -1,8 +1,8 @@
 import asyncio
 import random
-import yaml
 from pathlib import Path
 from utils.db import claim_job, mark_posted, mark_failed, init_db
+from utils.config_loader import load_config
 from managers.x_manager import XManager
 from managers.reddit_manager import RedditManager
 from managers.instagram_manager import InstagramManager
@@ -13,11 +13,7 @@ from utils.rate_limiter import RateLimiter
 
 init_db()
 limiter = RateLimiter()
-
-CONFIG = {}
-if Path("config.yaml").exists():
-    with open("config.yaml") as f:
-        CONFIG = yaml.safe_load(f) or {}
+CONFIG = load_config()
 
 BROWSER_PLATFORMS = {"x", "reddit", "instagram", "tiktok", "threads"}
 
@@ -25,12 +21,12 @@ def make_manager(platform: str):
     acc = CONFIG.get("accounts", {}).get(platform, {})
     creds = {k: v for k, v in acc.items() if k in ("username", "password", "email", "handle")}
     if platform == "x":
-        return XManager(acc.get("handle", "x"), credentials=creds)
+        return XManager(acc.get("handle") or acc.get("username") or "x", credentials=creds)
     if platform == "reddit":
         subs = acc.get("subreddits") or ["fitness"]
         return RedditManager(acc.get("username", "reddit"), credentials=creds, subreddit=subs[0])
     if platform == "instagram":
-        return InstagramManager(acc.get("handle", "ig"), credentials=creds)
+        return InstagramManager(acc.get("handle") or acc.get("username") or "ig", credentials=creds)
     if platform == "tiktok":
         return TikTokManager(acc.get("handle", "tt"), credentials=creds)
     if platform == "threads":
