@@ -1,9 +1,9 @@
 from managers.base_manager import BaseManager
 from utils.stealth import launch_stealth_context, human_delay, human_type
 from utils.screenshot import capture_failure
+from utils.selectors import first_match, click_first, X_COMPOSE, X_POST_BTN
 from playwright.async_api import async_playwright
 from pathlib import Path
-import os
 
 class XManager(BaseManager):
     def __init__(self, handle: str, credentials: dict = None):
@@ -17,13 +17,9 @@ class XManager(BaseManager):
         self._pw = await async_playwright().start()
         user_dir = f"./user_data/x_{self.handle}"
         Path(user_dir).mkdir(parents=True, exist_ok=True)
-        storage = self.get_session_path() if Path(self.get_session_path()).exists() else None
         self.context = await launch_stealth_context(
             self._pw, "x", user_data_dir=user_dir, headless=False
         )
-        if storage and Path(storage).exists():
-            # persistent context already loads profile; also try storage_state if needed
-            pass
         self.page = self.context.pages[0] if self.context.pages else await self.context.new_page()
 
     async def is_logged_in(self) -> bool:
@@ -46,22 +42,23 @@ class XManager(BaseManager):
         pw = self.credentials.get("password") or ""
         if not user or not pw:
             raise RuntimeError("X credentials missing")
-        # username
-        await self.page.wait_for_selector('input[autocomplete="username"]', timeout=15000)
-        await human_type(self.page, 'input[autocomplete="username"]', user)
+        user_sel = await first_match(self.page, [
+            'input[autocomplete="username"]',
+            'input[name="text"]',
+            'input[type="text"]',
+        ])
+        if not user_sel:
+            raise RuntimeError("X username field not found")
+        await user_sel.fill(user)
         await self.page.keyboard.press("Enter")
         await human_delay(2, 4)
-        # possible unusual activity / phone intermediate
-        try:
-            unusual = self.page.locator('input[data-testid="ocfEnterTextTextInput"]')
-            if await unusual.count():
-                # leave for manual / skip
-                pass
-        except Exception:
-            pass
-        # password
-        await self.page.wait_for_selector('input[name="password"]', timeout=15000)
-        await human_type(self.page, 'input[name="password"]', pw)
+        pw_sel = await first_match(self.page, [
+            'input[name="password"]',
+            'input[type="password"]',
+        ])
+        if not pw_sel:
+            raise RuntimeError("X password field not found")
+        await pw_sel.fill(pw)
         await self.page.keyboard.press("Enter")
         await human_delay(4, 8)
         if await self.is_logged_in():
@@ -81,19 +78,20 @@ class XManager(BaseManager):
             file_input = self.page.locator('input[type="file"]').first
             await file_input.set_input_files(video_path)
             await human_delay(4, 8)
-            editor = self.page.locator('[data-testid="tweetTextarea_0"]')
+            editor = await first_match(self.page, X_COMPOSE)
+            if not editor:
+                raise RuntimeError("X compose box not found")
             await editor.click()
-            await human_type(self.page, '[data-testid="tweetTextarea_0"]', caption[:280])
+            await self.page.keyboard.type(caption[:280], delay=40)
             await human_delay(1, 2)
-            btn = self.page.locator('[data-testid="tweetButton"]')
-            await btn.click()
+            if not await click_first(self.page, X_POST_BTN):
+                raise RuntimeError("X Post button not found")
             await human_delay(5, 10)
             url = self.page.url
             if "/status/" in url:
                 return url
-            # try extract from toast / timeline
             return f"https://x.com/{self.handle}"
-        except Exception as e:
+        except Exception:
             if self.page:
                 await capture_failure(self.page, "x", "post")
             raise
