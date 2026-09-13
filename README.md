@@ -1,16 +1,30 @@
-# Multi-Platform Social Distribution Bot
+# orch
 
-5-platform Playwright automation (X, Reddit, Instagram, TikTok, Threads) + content arbitrage pipeline.
+5-Platform Social Distribution Bot (X · Reddit · Instagram · TikTok · Threads)
 
-## Quick Start
-1. `pip install -r requirements.txt`
-2. `playwright install`
-3. Configure `config.yaml`
-4. Run Telegram bot + FastAPI + worker
+## Stack
+- Playwright stealth sessions
+- FastAPI `/distribute`
+- SQLite job queue
+- aiogram Telegram trigger
+- Per-platform managers inheriting BaseManager
 
-## Architecture
-- Telegram bot → FastAPI /distribute → SQLite queue → platform managers
-- Stealth Playwright sessions
-- SFW content collectors (RedGIFs, Eporner)
+## Run
+```bash
+pip install -r requirements.txt
+playwright install chromium
+export TELEGRAM_BOT_TOKEN=...
+python api_router.py &          # :8000
+python queue_worker.py &        # consumer
+python telegram_bot.py          # trigger
+```
 
-Repo: https://github.com/xlide-fun/multi-platform-social-distribution
+## Flow
+Telegram video + caption → POST /distribute → queue → staggered post with human delays + screenshots on fail.
+
+Sessions: `./sessions/{platform}_{handle}.json`
+User data: `./user_data/...` (persistent profiles)
+
+Selectors will break — fallbacks + screenshots included.
+
+https://github.com/xlide-fun/orch
