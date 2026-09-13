@@ -1,30 +1,30 @@
 # orch
 
-5-Platform Social Distribution Bot (X · Reddit · Instagram · TikTok · Threads)
+Cross-platform content distribution + arbitrage pipeline.
 
-## Stack
-- Playwright stealth sessions
-- FastAPI `/distribute`
-- SQLite job queue
-- aiogram Telegram trigger
-- Per-platform managers inheriting BaseManager
+## Browser tier (Playwright)
+X · Reddit · Instagram · TikTok · Threads
+
+## API tier (stubs ready)
+Telegram · Discord · Mastodon · Bluesky · LinkedIn · Tumblr
+
+## Pipeline
+1. Collectors (RedGIFs / Eporner) → SFW filter
+2. Categorizer (fitness/sports/dance/art/adventure)
+3. Normalizer + conversion CTAs
+4. Queue → browser or API workers
 
 ## Run
 ```bash
-pip install -r requirements.txt
-playwright install chromium
-export TELEGRAM_BOT_TOKEN=...
-python api_router.py &          # :8000
-python queue_worker.py &        # consumer
-python telegram_bot.py          # trigger
+pip install -r requirements.txt && playwright install chromium
+export TELEGRAM_BOT_TOKEN=... REDGIFS_API_KEY=... EPORNER_API_KEY=...
+python api_router.py &
+python queue_worker.py &
+python orchestrator/main.py &
+python telegram_bot.py
 ```
 
-## Flow
-Telegram video + caption → POST /distribute → queue → staggered post with human delays + screenshots on fail.
-
-Sessions: `./sessions/{platform}_{handle}.json`
-User data: `./user_data/...` (persistent profiles)
-
-Selectors will break — fallbacks + screenshots included.
+Sessions persist in `./sessions` and `./user_data`.
+Screenshots on failure → `./screenshots`.
 
 https://github.com/xlide-fun/orch
