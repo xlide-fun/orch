@@ -1,15 +1,21 @@
 import aiohttp
 import os
 from pathlib import Path
+from urllib.parse import urlparse
 
-async def download_media(url: str, dest_dir: str = "./media_cache") -> str:
-    Path(dest_dir).mkdir(parents=True, exist_ok=True)
-    name = url.split("/")[-1].split("?")[0] or "media.bin"
-    path = os.path.join(dest_dir, name)
-    if os.path.exists(path):
-        return path
+CACHE_DIR = Path("./media_cache")
+CACHE_DIR.mkdir(exist_ok=True)
+
+async def download_media(url: str, prefix: str = "") -> str:
+    if not url or url.startswith("/"):
+        return url  # already local
+    name = prefix + Path(urlparse(url).path).name or "media.bin"
+    dest = CACHE_DIR / name
+    if dest.exists() and dest.stat().st_size > 0:
+        return str(dest)
     async with aiohttp.ClientSession() as s:
         async with s.get(url) as r:
-            with open(path, "wb") as f:
+            r.raise_for_status()
+            with open(dest, "wb") as f:
                 f.write(await r.read())
-    return path
+    return str(dest)
