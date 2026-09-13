@@ -1,0 +1,28 @@
+accounts:
+  x:
+    handle: "your_handle"
+    session: "./sessions/x_handle.json"
+  reddit:
+    username: "your_user"
+    session: "./sessions/reddit_user.json"
+    subreddits: ["fitness", "sports", "dance", "art", "adventures"]
+  instagram:
+    handle: "your_handle"
+    session: "./sessions/instagram_handle.json"
+  tiktok:
+    handle: "your_handle"
+    session: "./sessions/tiktok_handle.json"
+  threads:
+    handle: "your_handle"
+    session: "./sessions/threads_handle.json"
+
+rate_limits:
+  x: 15
+  reddit: 10
+  instagram: 5
+  tiktok: 5
+  threads: 20
+
+stealth:
+  headless: false
+  delays: [1, 8]
